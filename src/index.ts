@@ -707,6 +707,11 @@ async function dispatch_handler(request: Request, bucket: R2Bucket): Promise<Res
 				headers: {
 					Allow: SUPPORT_METHODS.join(', '),
 					DAV: DAV_CLASS,
+					'Access-Control-Allow-Origin': request.headers.get('Origin') ?? '*',
+					'Access-Control-Allow-Methods': SUPPORT_METHODS.join(', '),
+					'Access-Control-Allow-Headers': ['authorization', 'content-type', 'depth', 'overwrite', 'destination', 'range'].join(', '),
+					'Access-Control-Allow-Credentials': 'false',
+					'Access-Control-Max-Age': '86400',
 				},
 			});
 		}
@@ -762,8 +767,12 @@ export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const { bucket } = env;
 
+		// 如果环境变量中的用户名和密码都为空，则跳过认证
+		const requireAuth = env.USERNAME && env.PASSWORD
+		
 		if (
 			request.method !== 'OPTIONS' &&
+			requireAuth &&
 			!is_authorized(request.headers.get('Authorization') ?? '', env.USERNAME, env.PASSWORD)
 		) {
 			return new Response('Unauthorized', {
