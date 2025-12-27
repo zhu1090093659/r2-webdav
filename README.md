@@ -82,6 +82,42 @@ curl -X DELETE https://your-worker.workers.dev/admin/users/alice \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 ```
 
+## User Self-Registration
+
+Users can register themselves via the `/register` endpoint.
+
+### Public Registration (No Token Required)
+
+By default, if no `REGISTER_TOKEN` is set, anyone can register:
+
+```bash
+curl -X POST https://your-worker.workers.dev/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "newuser", "password": "mypassword"}'
+```
+
+### Token-Protected Registration
+
+To require an invitation token for registration, set `REGISTER_TOKEN`:
+
+```bash
+wrangler secret put REGISTER_TOKEN
+```
+
+Then users must provide the token when registering:
+
+```bash
+curl -X POST https://your-worker.workers.dev/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "newuser", "password": "mypassword", "token": "YOUR_REGISTER_TOKEN"}'
+```
+
+### Registration Rules
+
+- Username: 1-64 characters, alphanumeric, dot, underscore, hyphen only
+- Password: minimum 6 characters
+- Self-registered users are not admins
+
 ## WebDAV Client Connection
 
 Connect with any WebDAV client using Basic Auth:

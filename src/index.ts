@@ -18,6 +18,11 @@ export interface Env {
 	// Admin token for management API
 	ADMIN_TOKEN: string;
 
+	// Registration token for self-registration (optional)
+	// If set, users must provide this token to register
+	// If not set, public registration is allowed
+	REGISTER_TOKEN?: string;
+
 	// Legacy single-user auth (optional, for backward compatibility)
 	USERNAME?: string;
 	PASSWORD?: string;
@@ -1096,6 +1101,109 @@ async function handleAdminApi(request: Request, env: Env): Promise<Response> {
 	return new Response('Not Found', { status: 404 });
 }
 
+// Minimum password length for registration
+const MIN_PASSWORD_LENGTH = 6;
+
+// Handle user self-registration
+async function handleRegister(request: Request, env: Env): Promise<Response> {
+	// Only allow POST method
+	if (request.method !== 'POST') {
+		return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+			status: 405,
+			headers: { 'Content-Type': 'application/json' },
+		});
+	}
+
+	// Check if multi-user mode is enabled
+	if (env.users === undefined) {
+		return new Response(JSON.stringify({ error: 'Registration not available in single-user mode' }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' },
+		});
+	}
+
+	// Parse request body
+	let body: { username?: string; password?: string; token?: string };
+	try {
+		body = await request.json() as { username?: string; password?: string; token?: string };
+	} catch {
+		return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' },
+		});
+	}
+
+	// Validate required fields
+	if (!body.username || !body.password) {
+		return new Response(JSON.stringify({ error: 'username and password required' }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' },
+		});
+	}
+
+	// Check registration token if configured
+	if (env.REGISTER_TOKEN) {
+		if (!body.token) {
+			return new Response(JSON.stringify({ error: 'Registration token required' }), {
+				status: 401,
+				headers: { 'Content-Type': 'application/json' },
+			});
+		}
+		// Timing-safe comparison
+		const encoder = new TextEncoder();
+		const a = encoder.encode(body.token);
+		const b = encoder.encode(env.REGISTER_TOKEN);
+		if (a.byteLength !== b.byteLength || !crypto.subtle.timingSafeEqual(a, b)) {
+			return new Response(JSON.stringify({ error: 'Invalid registration token' }), {
+				status: 403,
+				headers: { 'Content-Type': 'application/json' },
+			});
+		}
+	}
+
+	// Validate username format
+	if (!SAFE_USERNAME_PATTERN.test(body.username)) {
+		return new Response(JSON.stringify({ error: 'Invalid username. Use only alphanumeric, dot, underscore, hyphen (1-64 chars)' }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' },
+		});
+	}
+
+	// Validate password length
+	if (body.password.length < MIN_PASSWORD_LENGTH) {
+		return new Response(JSON.stringify({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` }), {
+			status: 400,
+			headers: { 'Content-Type': 'application/json' },
+		});
+	}
+
+	// Check if username already exists
+	const existingUser = await loadUser(env.users, body.username);
+	if (existingUser) {
+		return new Response(JSON.stringify({ error: 'Username already taken' }), {
+			status: 409,
+			headers: { 'Content-Type': 'application/json' },
+		});
+	}
+
+	// Create user
+	const salt = generateSalt();
+	const passwordHash = await hashPassword(body.password, salt);
+	const user: UserRecord = {
+		username: body.username,
+		passwordHash,
+		salt: btoa(String.fromCharCode(...salt)),
+		isAdmin: false,
+		createdAt: new Date().toISOString(),
+	};
+	await saveUser(env.users, user);
+
+	return new Response(JSON.stringify({ success: true, username: body.username }), {
+		status: 201,
+		headers: { 'Content-Type': 'application/json' },
+	});
+}
+
 export default {
 	async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
 		const { bucket } = env;
@@ -1104,6 +1212,11 @@ export default {
 		// Handle admin API requests
 		if (url.pathname.startsWith('/admin/')) {
 			return handleAdminApi(request, env);
+		}
+
+		// Handle user self-registration
+		if (url.pathname === '/register') {
+			return handleRegister(request, env);
 		}
 
 		// Handle OPTIONS without auth
