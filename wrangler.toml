@@ -10,6 +10,13 @@ compatibility_flags = ["nodejs_compat"]
 binding = "bucket" # <~ valid JavaScript variable name
 bucket_name = "webdav"
 
+# Bind a KV Namespace for storing user accounts
+# Docs: https://developers.cloudflare.com/workers/runtime-apis/kv/
+# Create with: wrangler kv namespace create users
+[[kv_namespaces]]
+binding = "users"
+id = "YOUR_KV_NAMESPACE_ID"
+
 # Docs: https://developers.cloudflare.com/workers/observability/logs/workers-logs/#enable-workers-logs
 [observability]
 enabled = true

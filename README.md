@@ -14,7 +14,9 @@ binding = 'bucket' # <~ valid JavaScript variable name, don't change this
 bucket_name = 'webdav'
 ```
 
-Then use wrangler to deploy.
+### Single-User Mode (Legacy)
+
+For simple single-user setup, use environment secrets:
 
 ```bash
 wrangler deploy
@@ -22,6 +24,73 @@ wrangler deploy
 wrangler secret put USERNAME
 wrangler secret put PASSWORD
 ```
+
+### Multi-User Mode
+
+For multi-user setup with per-user isolation, configure KV namespace:
+
+1. Create KV namespace:
+
+```bash
+wrangler kv namespace create users
+```
+
+2. Update `wrangler.toml` with the returned namespace ID:
+
+```toml
+[[kv_namespaces]]
+binding = "users"
+id = "YOUR_KV_NAMESPACE_ID"
+```
+
+3. Set admin token for management API:
+
+```bash
+wrangler secret put ADMIN_TOKEN
+```
+
+4. Deploy:
+
+```bash
+wrangler deploy
+```
+
+## Admin API
+
+When multi-user mode is enabled, you can manage users via the Admin API.
+
+### Create User
+
+```bash
+curl -X POST https://your-worker.workers.dev/admin/users \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice", "password": "secret123"}'
+```
+
+### List Users
+
+```bash
+curl https://your-worker.workers.dev/admin/users \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+
+### Delete User
+
+```bash
+curl -X DELETE https://your-worker.workers.dev/admin/users/alice \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+
+## WebDAV Client Connection
+
+Connect with any WebDAV client using Basic Auth:
+
+- **URL**: `https://your-worker.workers.dev/`
+- **Username**: Your username (e.g., `alice`)
+- **Password**: Your password
+
+In multi-user mode, each user's files are isolated under their own `username/` prefix in R2. Users cannot access each other's files.
 
 ## Development
 
