@@ -1010,10 +1010,236 @@ function is_authorized(authorization_header: string, username: string, password:
 	return header.byteLength === expected.byteLength && crypto.subtle.timingSafeEqual(header, expected);
 }
 
+// Admin UI HTML page
+function getAdminHtml(): string {
+	return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>R2-WebDAV Admin</title>
+	<style>
+		* { box-sizing: border-box; margin: 0; padding: 0; }
+		body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; min-height: 100vh; }
+		.container { max-width: 800px; margin: 0 auto; padding: 20px; }
+		h1 { color: #333; margin-bottom: 20px; }
+		.card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+		.card h2 { color: #444; margin-bottom: 15px; font-size: 18px; }
+		.form-group { margin-bottom: 15px; }
+		label { display: block; margin-bottom: 5px; color: #555; font-weight: 500; }
+		input[type="text"], input[type="password"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+		input:focus { outline: none; border-color: #4CAF50; }
+		button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+		.btn-primary { background: #4CAF50; color: white; }
+		.btn-primary:hover { background: #45a049; }
+		.btn-danger { background: #f44336; color: white; padding: 5px 10px; font-size: 12px; }
+		.btn-danger:hover { background: #da190b; }
+		.hidden { display: none; }
+		.user-list { list-style: none; }
+		.user-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+		.user-item:last-child { border-bottom: none; }
+		.user-info { display: flex; align-items: center; gap: 10px; }
+		.badge { padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+		.badge-admin { background: #e3f2fd; color: #1976d2; }
+		.badge-user { background: #f5f5f5; color: #666; }
+		.message { padding: 10px; border-radius: 4px; margin-bottom: 15px; }
+		.message.success { background: #e8f5e9; color: #2e7d32; }
+		.message.error { background: #ffebee; color: #c62828; }
+		.checkbox-group { display: flex; align-items: center; gap: 8px; }
+		.checkbox-group input { width: auto; }
+		.empty { color: #999; text-align: center; padding: 20px; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>R2-WebDAV Admin</h1>
+
+		<!-- Login Section -->
+		<div id="loginSection" class="card">
+			<h2>Admin Login</h2>
+			<div class="form-group">
+				<label for="adminToken">Admin Token</label>
+				<input type="password" id="adminToken" placeholder="Enter admin token">
+			</div>
+			<button class="btn-primary" onclick="login()">Login</button>
+		</div>
+
+		<!-- Main Section (hidden until login) -->
+		<div id="mainSection" class="hidden">
+			<div id="messageBox" class="message hidden"></div>
+
+			<!-- Create User -->
+			<div class="card">
+				<h2>Create User</h2>
+				<div class="form-group">
+					<label for="newUsername">Username</label>
+					<input type="text" id="newUsername" placeholder="Enter username">
+				</div>
+				<div class="form-group">
+					<label for="newPassword">Password</label>
+					<input type="password" id="newPassword" placeholder="Enter password">
+				</div>
+				<div class="form-group checkbox-group">
+					<input type="checkbox" id="isAdmin">
+					<label for="isAdmin">Admin privileges</label>
+				</div>
+				<button class="btn-primary" onclick="createUser()">Create User</button>
+			</div>
+
+			<!-- User List -->
+			<div class="card">
+				<h2>Users</h2>
+				<ul id="userList" class="user-list">
+					<li class="empty">Loading...</li>
+				</ul>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		let token = localStorage.getItem('adminToken') || '';
+
+		// Check if already logged in
+		if (token) {
+			document.getElementById('adminToken').value = token;
+			login();
+		}
+
+		async function login() {
+			token = document.getElementById('adminToken').value;
+			if (!token) {
+				showMessage('Please enter admin token', 'error');
+				return;
+			}
+
+			try {
+				const res = await fetch('/admin/users', {
+					headers: { 'Authorization': 'Bearer ' + token }
+				});
+
+				if (res.ok) {
+					localStorage.setItem('adminToken', token);
+					document.getElementById('loginSection').classList.add('hidden');
+					document.getElementById('mainSection').classList.remove('hidden');
+					loadUsers();
+				} else {
+					showMessage('Invalid admin token', 'error');
+				}
+			} catch (e) {
+				showMessage('Connection error: ' + e.message, 'error');
+			}
+		}
+
+		async function loadUsers() {
+			try {
+				const res = await fetch('/admin/users', {
+					headers: { 'Authorization': 'Bearer ' + token }
+				});
+
+				if (!res.ok) throw new Error('Failed to load users');
+
+				const users = await res.json();
+				const list = document.getElementById('userList');
+
+				if (users.length === 0) {
+					list.innerHTML = '<li class="empty">No users yet</li>';
+					return;
+				}
+
+				list.innerHTML = users.map(u => \`
+					<li class="user-item">
+						<div class="user-info">
+							<span>\${u.username}</span>
+							<span class="badge \${u.isAdmin ? 'badge-admin' : 'badge-user'}">\${u.isAdmin ? 'Admin' : 'User'}</span>
+						</div>
+						<button class="btn-danger" onclick="deleteUser('\${u.username}')">Delete</button>
+					</li>
+				\`).join('');
+			} catch (e) {
+				showMessage('Failed to load users: ' + e.message, 'error');
+			}
+		}
+
+		async function createUser() {
+			const username = document.getElementById('newUsername').value;
+			const password = document.getElementById('newPassword').value;
+			const isAdmin = document.getElementById('isAdmin').checked;
+
+			if (!username || !password) {
+				showMessage('Username and password are required', 'error');
+				return;
+			}
+
+			try {
+				const res = await fetch('/admin/users', {
+					method: 'POST',
+					headers: {
+						'Authorization': 'Bearer ' + token,
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({ username, password, isAdmin })
+				});
+
+				const data = await res.json();
+
+				if (res.ok) {
+					showMessage('User created: ' + username, 'success');
+					document.getElementById('newUsername').value = '';
+					document.getElementById('newPassword').value = '';
+					document.getElementById('isAdmin').checked = false;
+					loadUsers();
+				} else {
+					showMessage(data.error || 'Failed to create user', 'error');
+				}
+			} catch (e) {
+				showMessage('Error: ' + e.message, 'error');
+			}
+		}
+
+		async function deleteUser(username) {
+			if (!confirm('Are you sure you want to delete user "' + username + '"?')) return;
+
+			try {
+				const res = await fetch('/admin/users/' + encodeURIComponent(username), {
+					method: 'DELETE',
+					headers: { 'Authorization': 'Bearer ' + token }
+				});
+
+				if (res.ok) {
+					showMessage('User deleted: ' + username, 'success');
+					loadUsers();
+				} else {
+					showMessage('Failed to delete user', 'error');
+				}
+			} catch (e) {
+				showMessage('Error: ' + e.message, 'error');
+			}
+		}
+
+		function showMessage(msg, type) {
+			const box = document.getElementById('messageBox');
+			box.textContent = msg;
+			box.className = 'message ' + type;
+			box.classList.remove('hidden');
+			setTimeout(() => box.classList.add('hidden'), 3000);
+		}
+	</script>
+</body>
+</html>`;
+}
+
 // Handle admin API requests
 async function handleAdminApi(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url);
 	const path = url.pathname;
+
+	// Serve admin UI page
+	if (path === '/admin/' && request.method === 'GET') {
+		return new Response(getAdminHtml(), {
+			status: 200,
+			headers: { 'Content-Type': 'text/html; charset=utf-8' },
+		});
+	}
 
 	// Verify admin token
 	const authHeader = request.headers.get('Authorization');

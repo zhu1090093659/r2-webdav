@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(npm run build:*)",
-      "Bash(npx wrangler deploy --dry-run)"
+      "Bash(npx wrangler deploy --dry-run)",
+      "Bash(npx wrangler:*)",
+      "Bash(curl -X POST https://wdav.chatwithai.icu/admin/users -H \"Authorization: Bearer w4WBLg2AeyKDQ2JYoCAC\" -H \"Content-Type: application/json\" -d \"{\"\"username\"\": \"\"linxin\"\", \"\"password\"\": \"\"@Zcl000204\"\", \"\"isAdmin\"\": true}\")",
+      "Bash(curl -X POST https://r2-webdav.1090093659.workers.dev/admin/users -H \"Authorization: Bearer w4WBLg2AeyKDQ2JYoCAC\" -H \"Content-Type: application/json\" -d \"{\"\"username\"\": \"\"linxin\"\", \"\"password\"\": \"\"@Zcl000204\"\", \"\"isAdmin\"\": true}\")"
     ]
   }
 }
